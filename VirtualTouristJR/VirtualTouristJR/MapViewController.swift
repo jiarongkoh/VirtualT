@@ -32,10 +32,7 @@ class MapViewController: UIViewController, MKMapViewDelegate {
         pins = fetchAllPins()
         
         for pin in pins {
-            let coordinate = CLLocationCoordinate2DMake(pin.lat, pin.long)
-            let annotation = MKPointAnnotation()
-            annotation.coordinate = coordinate
-            mapView.addAnnotation(annotation)
+            mapView.addAnnotation(pin)
         }
         
     }
@@ -58,15 +55,6 @@ class MapViewController: UIViewController, MKMapViewDelegate {
     
     @IBAction func retreive(_ sender: Any) {
 
-        FlickrClient.sharedInstance.getPhotos(1.2987 as AnyObject, lon: 103.8474 as AnyObject) { (success, error) in
-            if let error = error {
-                print(error)
-            } else {
-                if let _ = success {
-                    print("Ok!")
-                }
-            }
-        }
     }
     
     func fetchAllPins() -> [Pin] {
@@ -89,16 +77,12 @@ class MapViewController: UIViewController, MKMapViewDelegate {
         if gestureRecognizer.state == UIGestureRecognizerState.began {
             let touchPoint = gestureRecognizer.location(in: mapView)
             let touchCoordinate = mapView.convert(touchPoint, toCoordinateFrom: mapView)
-            let annotation = MKPointAnnotation()
-            annotation.coordinate = touchCoordinate
-            
-            mapView.addAnnotation(annotation)
-            print(touchCoordinate)
-            
+
             let stack = delegate.stack
             addedPin = Pin(lat: touchCoordinate.latitude, long: touchCoordinate.longitude, context: (stack?.context)! )
             do {
                 try stack?.saveContext()
+                mapView.addAnnotation(addedPin)
             } catch {
                 print("Error while saving.")
             }
@@ -111,27 +95,26 @@ class MapViewController: UIViewController, MKMapViewDelegate {
         let pinView = mapView.dequeueReusableAnnotationView(withIdentifier: reuseId) as? MKPinAnnotationView ?? MKPinAnnotationView(annotation: annotation, reuseIdentifier: reuseId)
 
         pinView.animatesDrop = true
-//        pinView.setSelected(true, animated: true)
         pinView.isSelected = true
         
-//        pinView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(viewPin)))
-     
-//        let selectedPin = annotation as! Pin
-//        print("Selected Pin: \(selectedPin)")
-//        
         return pinView
     }
     
     func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
-        let pin = view.annotation as! Pin
-        mapView.deselectAnnotation(pin, animated: false)
-        
-        print("Selected Pin: \(pin)")
-        viewPin()
+        if let pin = view.annotation as? Pin {
+            mapView.deselectAnnotation(pin, animated: false)
+            viewPin(pin)
+        } else {
+            print("not pin \(view.annotation?.coordinate)")
+        }
     }
     
     func mapView(_ mapView: MKMapView, didDeselect view: MKAnnotationView) {
-        view.isSelected = true
+        if let _ = view.annotation as? Pin {
+            view.isSelected = true
+        } else {
+            print("deselect not pin \(view.annotation?.coordinate)")
+        }
     }
     
     
@@ -152,10 +135,10 @@ class MapViewController: UIViewController, MKMapViewDelegate {
 
     }
     
-    func viewPin() {
-        let controller = storyboard?.instantiateViewController(withIdentifier: "CollectionVC") as! PhotoAlbumCollectionViewController
+    func viewPin(_ pin: Pin) {
+        let controller = storyboard?.instantiateViewController(withIdentifier: "PhotoAlbum") as! PhotoAlbumViewController
+        controller.pin = pin
         navigationController?.pushViewController(controller, animated: true)
     }
-
 
 }

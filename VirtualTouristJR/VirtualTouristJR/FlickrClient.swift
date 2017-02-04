@@ -18,15 +18,17 @@ class FlickrClient: NSObject {
         super.init()
     }
     
-    func getPhotos(_ lat: AnyObject, lon: AnyObject, _ completionHandlerForGetPhotos: @escaping (_ success: Bool?, _ error: NSError?) -> Void) {
+    func getPhotos(_ lat: AnyObject, lon: AnyObject, _ completionHandlerForGetPhotos: @escaping (_ imageData: [Data]?, _ error: NSError?) -> Void) {
+        let randomPageIndex = Int(arc4random_uniform(100))
         
         let parameters = [
             Constants.ParametersKey.Method: Constants.Methods.PhotoSearch as AnyObject,
             Constants.ParametersKey.FlickrAPIKey : Constants.APIInfo.APIKey as AnyObject,
             Constants.ParametersKey.Format: Constants.ParametersValues.JSON as AnyObject,
             Constants.ParametersKey.NoJSONCallback: Constants.ParametersValues.DisableJSONCallback as AnyObject,
-            Constants.ParametersKey.Page: Constants.ParametersValues.OnePage as AnyObject,
-            Constants.ParametersKey.PerPage: Constants.ParametersValues.Fifteen as AnyObject]
+            Constants.ParametersKey.Page: randomPageIndex as AnyObject,
+            Constants.ParametersKey.PerPage: Constants.ParametersValues.Fifteen as AnyObject,
+            Constants.ParametersKey.Extras: Constants.ParametersValues.MediumURL as AnyObject]
         
         var parametersWithCoord = parameters
         parametersWithCoord[Constants.ParametersKey.lat] = lat
@@ -34,20 +36,46 @@ class FlickrClient: NSObject {
         
         let url = flickrURLFromParameters(parametersWithCoord)
         let request = NSMutableURLRequest(url: url)
-        print(url)
+
         let task = session.dataTask(with: request as URLRequest) { (data, respnse, error) in
             if let error = error {
-                completionHandlerForGetPhotos(false, error as NSError?)
+                completionHandlerForGetPhotos(nil, error as NSError?)
             } else {
-                let dataString = NSString(data: data!, encoding: String.Encoding.utf8.rawValue)
-                print(dataString)
-                
+
                 self.convertDataWithCompletionHandler(data!, completionHandlerForConvertData: { (results, error) in
                     if let error = error {
-                        completionHandlerForGetPhotos(false, error as NSError?)
+                        completionHandlerForGetPhotos(nil, error as NSError?)
                     } else {
-                        print(results)
-                        completionHandlerForGetPhotos(true, nil)
+                        
+                        guard let photosDict = results?["photos"] as? [String: AnyObject] else {
+                            let userInfo = [NSLocalizedDescriptionKey : "NoPhotosFound"]
+                            completionHandlerForGetPhotos(nil, NSError(domain: "NoPhotosFound", code: 1, userInfo: userInfo))
+                            return
+                        }
+                        
+                        guard let photosArray = photosDict["photo"] as? [[String: AnyObject]] else {
+                            let userInfo = [NSLocalizedDescriptionKey : "NoPhotosArrayFound"]
+                            completionHandlerForGetPhotos(nil, NSError(domain: "NoPhotosArray", code: 1, userInfo: userInfo))
+                            return
+                        }
+                        
+                        var imageDataArray: [Data] = []
+
+                        if photosArray.count != 0 {
+                            for pics in photosArray {
+                                guard let imageURLString = pics[Constants.ParametersValues.MediumURL] as? String else {
+                                    print("NoImageURLString Found")
+                                    return
+                                }
+                                
+                                let imageURL = URL(string: imageURLString)
+                                if let imageData = try? Data(contentsOf: imageURL!) {
+                                    imageDataArray.append(imageData)
+                                }
+                            }
+                        }
+                        
+                        completionHandlerForGetPhotos(imageDataArray, nil)
                     }
                 })
             }

@@ -33,6 +33,7 @@ struct Constants {
         static let NoJSONCallback = "nojsoncallback"
         static let Page = "page"
         static let PerPage = "per_page"
+        static let Extras = "extras"
     }
     
     struct ParametersValues {
@@ -40,6 +41,7 @@ struct Constants {
         static let DisableJSONCallback = "1"
         static let OnePage = "1"
         static let Fifteen = "15"
+        static let MediumURL = "url_m"
     }
     
     

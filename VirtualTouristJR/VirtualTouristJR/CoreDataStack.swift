@@ -12,6 +12,7 @@ import CoreData
 
 struct CoreDataStack {
     
+
     // MARK: Properties
     
     private let model: NSManagedObjectModel
