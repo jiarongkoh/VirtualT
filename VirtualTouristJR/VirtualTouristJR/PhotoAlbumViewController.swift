@@ -12,6 +12,7 @@ import CoreData
 
 class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate, MKMapViewDelegate {
 
+    @IBOutlet weak var newColActivityIndicator: UIActivityIndicatorView!
     @IBOutlet weak var newCollectionButton: UIButton!
     @IBOutlet weak var collectionView: UICollectionView!
     @IBOutlet weak var flowLayout: UICollectionViewFlowLayout!
@@ -20,9 +21,9 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
     let delegate = UIApplication.shared.delegate as! AppDelegate
     
     var pin: Pin!
-    var photos: [Photo]!
-    var insertedIndexPaths: [NSIndexPath]!
-    var deletedIndexPaths: [NSIndexPath]!
+    var photos = [Photo]()
+    var insertedIndexPaths: [IndexPath]!
+    var deletedIndexPaths: [IndexPath]!
 
     lazy var context: NSManagedObjectContext = {
         let appDelegate = UIApplication.shared.delegate as! AppDelegate
@@ -32,19 +33,20 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
     lazy var fetchedResultsController: NSFetchedResultsController<NSFetchRequestResult> = {
         let fetchedRequest = NSFetchRequest<NSFetchRequestResult>(entityName: "Photo")
         fetchedRequest.sortDescriptors = []
-        fetchedRequest.predicate = NSPredicate(format: "pins == %@", self.pin!)
+        fetchedRequest.predicate = NSPredicate(format: "pins == %@", argumentArray: [self.pin])
         return NSFetchedResultsController(fetchRequest: fetchedRequest, managedObjectContext: self.context, sectionNameKeyPath: nil, cacheName: nil)
     }()
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        newColActivityIndicator.isHidden = true
         mapView.delegate = self
         
         collectionView.dataSource = self
         collectionView.delegate = self
         
-        fetchedResultsController.delegate = self
+//        fetchedResultsController.delegate = self
         
         setUpMapView(coordinate: pin.coordinate)
         setUpCollectionViewLayout()
@@ -63,18 +65,31 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
         
         let fetchedObjects = fetchedResultsController.fetchedObjects
         if fetchedObjects?.count != 0 {
-            print("Image present in CoreData")
+            print("IMAGE PRESENT IN COREDATA")
             print("Count of fetchedObjects \(fetchedObjects?.count)")
-            print(fetchedObjects!)
+            
+            for objects in fetchedObjects! {
+                let fetchedPic = objects as! Photo
+                self.photos.append(fetchedPic)
+            }
+            
+            DispatchQueue.main.async {
+                self.collectionView.reloadData()
+            }
+            
         } else if fetchedObjects?.count == 0 {
-            print("No image in CoreData, fetching...")
-            print("Count of fetchedObjects \(fetchedObjects?.count)")
+            print("NO IMAGE IN COREDATA, FETCHING...")
             loadPhotos()
         }
+        
     }
+
     
     func loadPhotos() {
+        newColActivityIndicator.startAnimating()
+        newColActivityIndicator.isHidden = false
         newCollectionButton.isUserInteractionEnabled = false
+        newCollectionButton.alpha = 0.4
         
         FlickrClient.sharedInstance.getPhotos(pin.coordinate.latitude as AnyObject, lon: pin.coordinate.longitude as AnyObject, { (results, error) in
             if let error = error {
@@ -82,14 +97,9 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
             } else {
                 if results != nil {
                     
-                    DispatchQueue.main.async {
-                        self.collectionView.reloadData()
-                        self.newCollectionButton.isUserInteractionEnabled = true
-                    }
-                    
                     for result in results! {
                         let picture = Photo(pin: self.pin, imageData: result as NSData, context: self.context)
-                        print(picture)
+                        self.photos.append(picture)
                     }
                     
                     do {
@@ -97,32 +107,48 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
                     } catch let error as NSError {
                         print("Error saving context in loadPhotos(): \(error.localizedDescription)")
                     }
+                    
+                    DispatchQueue.main.async {
+                        self.collectionView.reloadData()
+                        self.newColActivityIndicator.stopAnimating()
+                        self.newColActivityIndicator.isHidden = true
+                        self.newCollectionButton.isUserInteractionEnabled = true
+                        self.newCollectionButton.alpha = 1.0
+                        print("Reload Data loadPhotos")
+
+                    }
+                    
                 }
             }
         })
 
     }
-    
-    func numberOfSections(in collectionView: UICollectionView) -> Int {
-        let sections = fetchedResultsController.sections?.count
-        print("Number of sections \(sections)")
 
-        return sections!
-    }
-    
-    
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        let count = fetchedResultsController.fetchedObjects?.count
-        print("Number of items \(count)")
-        return count!
+        print("Number of items \(photos.count)")
+        return photos.count
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "cell", for: indexPath) as! ImageViewCell
 
-        let photo = fetchedResultsController.object(at: indexPath) as! Photo
-        cell.imageView?.image = UIImage(data: photo.imageData as! Data)
+        cell.activityIndicator.startAnimating()
+        cell.activityIndicator.isHidden = false
         
+        let photo = photos[indexPath.row]
+        
+        if let photoImage = photo.imageData {
+            print("PhotoImage present")
+            DispatchQueue.main.async {
+                cell.activityIndicator.stopAnimating()
+                cell.activityIndicator.isHidden = true
+                cell.imageView?.image = UIImage(data: photoImage as Data)
+            }
+
+        } else {
+            print("PhotosImage don have")
+        }
+
         return cell
     }
     
@@ -132,6 +158,7 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
 
         let deleteAction = UIAlertAction(title: "Delete Photo", style: .destructive) { (action) in
             self.context.delete(self.fetchedResultsController.object(at: indexPath) as! Photo)
+            self.photos.remove(at: indexPath.row)
             DispatchQueue.main.async {
                 self.collectionView.reloadData()
             }
@@ -167,48 +194,19 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
     }
     
     @IBAction func newCollectionButtonDidTap(_ sender: Any) {
+        print("FETCHING NEW COLLECTION...")
+        DispatchQueue.main.async {
+            self.photos.removeAll()
+            self.collectionView.reloadData()
+            print("Reload Data newColVC")
+        }
         for items in fetchedResultsController.fetchedObjects! {
             context.delete(items as! NSManagedObject)
         }
-        print(fetchedResultsController.fetchedObjects?.count)
+        
         loadPhotos()
     }
     
+    
 }
 
-extension PhotoAlbumViewController: NSFetchedResultsControllerDelegate {
-    
-    func controllerWillChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
-//        insertedIndexPaths = []
-//        deletedIndexPaths = []
-        print("ControllerWillChangeContent!!")
-    }
-    
-    
-    func controller(_ controller: NSFetchedResultsController<NSFetchRequestResult>, didChange anObject: Any, at indexPath: IndexPath?, for type: NSFetchedResultsChangeType, newIndexPath: IndexPath?) {
-        switch type {
-        case .insert:
-            print("Inserting at \(newIndexPath)")
-            collectionView.insertItems(at: [newIndexPath!])
-        case .delete:
-            print("Deleting at \(indexPath)")
-            collectionView.deleteItems(at: [indexPath!])
-        default: ()
-        }
-    }
-    
-    func controllerDidChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
-        print("ControllerDidChangeContent!!!!")
-//        collectionView.performBatchUpdates({
-//            for indexPath in self.insertedIndexPaths {
-//                self.collectionView.insertItems(at: [indexPath as IndexPath])
-//            }
-//            
-//            for indexPath in self.deletedIndexPaths {
-//                self.collectionView.deleteItems(at: [indexPath as IndexPath])
-//            }
-//        }, completion: nil)
-    }
-}
-
-        

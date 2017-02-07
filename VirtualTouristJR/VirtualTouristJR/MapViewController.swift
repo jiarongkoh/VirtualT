@@ -138,6 +138,7 @@ class MapViewController: UIViewController, MKMapViewDelegate {
     func viewPin(_ pin: Pin) {
         let controller = storyboard?.instantiateViewController(withIdentifier: "PhotoAlbum") as! PhotoAlbumViewController
         controller.pin = pin
+        
         navigationController?.pushViewController(controller, animated: true)
     }
 
