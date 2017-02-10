@@ -20,5 +20,7 @@ extension Photo {
     @NSManaged public var lat: Double
     @NSManaged public var long: Double
     @NSManaged public var pins: Pin?
+    @NSManaged public var imageURL: String?
+
 
 }

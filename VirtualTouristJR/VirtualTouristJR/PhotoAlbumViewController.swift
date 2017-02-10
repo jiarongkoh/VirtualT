@@ -79,35 +79,39 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
             
         } else if fetchedObjects?.count == 0 {
             print("NO IMAGE IN COREDATA, FETCHING...")
-            loadPhotos()
+            getPhotosURL()
+            
+            DispatchQueue.main.async {
+                self.collectionView.reloadData()
+            }
+            
         }
         
     }
 
     
-    func loadPhotos() {
+    func getPhotosURL() {
         newColActivityIndicator.startAnimating()
         newColActivityIndicator.isHidden = false
         newCollectionButton.isUserInteractionEnabled = false
         newCollectionButton.alpha = 0.4
-        
-        FlickrClient.sharedInstance.getPhotos(pin.coordinate.latitude as AnyObject, lon: pin.coordinate.longitude as AnyObject, { (results, error) in
+
+        FlickrClient.sharedInstance.getPhotosURL(pin.coordinate.latitude as AnyObject, lon: pin.coordinate.longitude as AnyObject) { (results, error) in
             if let error = error {
-                print(error)
+                print(error.localizedDescription)
             } else {
-                if results != nil {
-                    
+                if let _ = results {
                     for result in results! {
-                        let picture = Photo(pin: self.pin, imageData: result as NSData, context: self.context)
+                        let picture = Photo(pin: self.pin, imageURL: result, context: self.context)
                         self.photos.append(picture)
                     }
-                    
+
                     do {
                         try self.delegate.stack?.saveContext()
                     } catch let error as NSError {
                         print("Error saving context in loadPhotos(): \(error.localizedDescription)")
                     }
-                    
+
                     DispatchQueue.main.async {
                         self.collectionView.reloadData()
                         self.newColActivityIndicator.stopAnimating()
@@ -117,11 +121,9 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
                         print("Reload Data loadPhotos")
 
                     }
-                    
                 }
             }
-        })
-
+        }
     }
 
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
@@ -146,7 +148,25 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
             }
 
         } else {
-            print("PhotosImage don have")
+            print("PhotoImage Not Present")
+            if let photoImageURLString = photo.imageURL {
+                let photoImageURL = URL(string: photoImageURLString)
+                if let imageData = try? Data(contentsOf: photoImageURL!) {
+                    photo.imageData = imageData as NSData
+                    
+                    do {
+                        try self.delegate.stack?.saveContext()
+                    } catch let error as NSError {
+                        print("Error saving context in loadPhotos(): \(error.localizedDescription)")
+                    }
+                    
+                    DispatchQueue.main.async {
+                        cell.activityIndicator.stopAnimating()
+                        cell.activityIndicator.isHidden = true
+                        cell.imageView?.image = UIImage(data: imageData as Data)
+                    }
+                }
+            }
         }
 
         return cell
@@ -197,6 +217,7 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
         print("FETCHING NEW COLLECTION...")
         DispatchQueue.main.async {
             self.photos.removeAll()
+            print(self.photos)
             self.collectionView.reloadData()
             print("Reload Data newColVC")
         }
@@ -204,7 +225,7 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
             context.delete(items as! NSManagedObject)
         }
         
-        loadPhotos()
+        getPhotosURL()
     }
     
     

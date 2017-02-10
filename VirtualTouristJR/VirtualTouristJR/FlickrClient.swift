@@ -84,6 +84,69 @@ class FlickrClient: NSObject {
         task.resume()
     }
     
+    
+    func getPhotosURL(_ lat: AnyObject, lon: AnyObject, _ completionHandlerForGetPhotosURL: @escaping (_ imageURL: [String]?, _ error: NSError?) -> Void) {
+        let randomPageIndex = Int(arc4random_uniform(100))
+        
+        let parameters = [
+        Constants.ParametersKey.Method: Constants.Methods.PhotoSearch as AnyObject,
+        Constants.ParametersKey.FlickrAPIKey : Constants.APIInfo.APIKey as AnyObject,
+        Constants.ParametersKey.Format: Constants.ParametersValues.JSON as AnyObject,
+        Constants.ParametersKey.NoJSONCallback: Constants.ParametersValues.DisableJSONCallback as AnyObject,
+        Constants.ParametersKey.Page: randomPageIndex as AnyObject,
+        Constants.ParametersKey.PerPage: Constants.ParametersValues.Fifteen as AnyObject,
+        Constants.ParametersKey.Extras: Constants.ParametersValues.MediumURL as AnyObject]
+        
+        var parametersWithCoord = parameters
+        parametersWithCoord[Constants.ParametersKey.lat] = lat
+        parametersWithCoord[Constants.ParametersKey.lon] = lon
+        
+        let url = flickrURLFromParameters(parametersWithCoord)
+        let request = NSMutableURLRequest(url: url)
+
+        let task = session.dataTask(with: request as URLRequest) { (data, response, error) in
+            if let error = error {
+                completionHandlerForGetPhotosURL(nil, error as NSError)
+            } else {
+                self.convertDataWithCompletionHandler(data!, completionHandlerForConvertData: { (results, error) in
+                    if let error = error {
+                        completionHandlerForGetPhotosURL(nil, error as NSError)
+                    } else {
+                        print(results)
+                        guard let photosDict = results?["photos"] as? [String: AnyObject] else {
+                            let userInfo = [NSLocalizedDescriptionKey : "NoPhotosFound"]
+                            completionHandlerForGetPhotosURL(nil, NSError(domain: "NoPhotosFound", code: 1, userInfo: userInfo))
+                            return
+                        }
+                        
+                        guard let photosArray = photosDict["photo"] as? [[String: AnyObject]] else {
+                            let userInfo = [NSLocalizedDescriptionKey : "NoPhotosArrayFound"]
+                            completionHandlerForGetPhotosURL(nil, NSError(domain: "NoPhotosArray", code: 1, userInfo: userInfo))
+                            return
+                        }
+                        
+                        var imageURLArray: [String] = []
+                        
+                        if photosArray.count != 0 {
+                            for pics in photosArray {
+                                guard let imageURLString = pics[Constants.ParametersValues.MediumURL] as? String else {
+                                    print("NoImageURLString Found")
+                                    return
+                                }
+                                
+                                imageURLArray.append(imageURLString)
+                            }
+                        }
+                        print("ImageURLArray : \(imageURLArray)")
+                        completionHandlerForGetPhotosURL(imageURLArray, nil)
+                    }
+                })
+            }
+        }
+        
+        task.resume()
+    }
+    
     func convertDataWithCompletionHandler(_ data: Data, completionHandlerForConvertData: (_ results: AnyObject?, _ error: NSError?) -> Void) {
         var parsedResult: AnyObject! = nil
         
