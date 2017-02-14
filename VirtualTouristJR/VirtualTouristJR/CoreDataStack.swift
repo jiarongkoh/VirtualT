@@ -55,6 +55,7 @@ struct CoreDataStack {
         }
         
         self.dbURL = docUrl.appendingPathComponent("model.sqlite")
+        print(self.dbURL)
         
         // Options for migration
         let options = [NSInferMappingModelAutomaticallyOption: true,NSMigratePersistentStoresAutomaticallyOption: true]

@@ -26,7 +26,7 @@ class MapViewController: UIViewController, MKMapViewDelegate {
         deleteToggleBool = false
         
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(addAnnotation))
-        longPress.minimumPressDuration = 1.5
+        longPress.minimumPressDuration = 0.5
         mapView.addGestureRecognizer(longPress)
         
         pins = fetchAllPins()

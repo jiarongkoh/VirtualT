@@ -32,6 +32,7 @@ struct Constants {
         static let Format = "format"
         static let NoJSONCallback = "nojsoncallback"
         static let Page = "page"
+        static let Pages = "pages"
         static let PerPage = "per_page"
         static let Extras = "extras"
     }

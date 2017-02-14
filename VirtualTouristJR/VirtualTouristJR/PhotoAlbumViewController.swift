@@ -41,13 +41,13 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
         super.viewDidLoad()
         
         newColActivityIndicator.isHidden = true
+        newColActivityIndicator.hidesWhenStopped = true
+
         mapView.delegate = self
         
         collectionView.dataSource = self
         collectionView.delegate = self
-        
-//        fetchedResultsController.delegate = self
-        
+                
         setUpMapView(coordinate: pin.coordinate)
         setUpCollectionViewLayout()
 
@@ -79,7 +79,7 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
             
         } else if fetchedObjects?.count == 0 {
             print("NO IMAGE IN COREDATA, FETCHING...")
-            getPhotosURL()
+            loadPhotosURL()
             
             DispatchQueue.main.async {
                 self.collectionView.reloadData()
@@ -89,19 +89,18 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
         
     }
 
-    
-    func getPhotosURL() {
+    func loadPhotosURL() {
         newColActivityIndicator.startAnimating()
-        newColActivityIndicator.isHidden = false
         newCollectionButton.isUserInteractionEnabled = false
         newCollectionButton.alpha = 0.4
 
-        FlickrClient.sharedInstance.getPhotosURL(pin.coordinate.latitude as AnyObject, lon: pin.coordinate.longitude as AnyObject) { (results, error) in
+        FlickrClient.sharedInstance.getPhotosURLFromFlickr(pin.coordinate.latitude as AnyObject, lon: pin.coordinate.longitude as AnyObject) { (results, error) in
             if let error = error {
                 print(error.localizedDescription)
             } else {
-                if let _ = results {
-                    for result in results! {
+                if let results = results {
+                    print(results)
+                    for result in results {
                         let picture = Photo(pin: self.pin, imageURL: result, context: self.context)
                         self.photos.append(picture)
                     }
@@ -115,11 +114,8 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
                     DispatchQueue.main.async {
                         self.collectionView.reloadData()
                         self.newColActivityIndicator.stopAnimating()
-                        self.newColActivityIndicator.isHidden = true
                         self.newCollectionButton.isUserInteractionEnabled = true
                         self.newCollectionButton.alpha = 1.0
-                        print("Reload Data loadPhotos")
-
                     }
                 }
             }
@@ -134,38 +130,36 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "cell", for: indexPath) as! ImageViewCell
 
+        cell.activityIndicator.hidesWhenStopped = true
         cell.activityIndicator.startAnimating()
         cell.activityIndicator.isHidden = false
         
         let photo = photos[indexPath.row]
         
         if let photoImage = photo.imageData {
-            print("PhotoImage present")
+            print("got imageData")
             DispatchQueue.main.async {
                 cell.activityIndicator.stopAnimating()
-                cell.activityIndicator.isHidden = true
                 cell.imageView?.image = UIImage(data: photoImage as Data)
             }
 
         } else {
-            print("PhotoImage Not Present")
             if let photoImageURLString = photo.imageURL {
-                let photoImageURL = URL(string: photoImageURLString)
-                if let imageData = try? Data(contentsOf: photoImageURL!) {
-                    photo.imageData = imageData as NSData
+                print("image url")
+                FlickrClient.sharedInstance.downloadPhotos(photoImageURLString, completionHandlerForDownloadPhotos: { (result, error) in
+                    if let error = error {
+                        print(error.localizedDescription)
+                    } else {
+                        
+                        if let imageData = result {
+                            DispatchQueue.main.async {
+                                cell.activityIndicator.stopAnimating()
+                                cell.imageView?.image = UIImage(data: imageData)
+                            }
+                        }
                     
-                    do {
-                        try self.delegate.stack?.saveContext()
-                    } catch let error as NSError {
-                        print("Error saving context in loadPhotos(): \(error.localizedDescription)")
                     }
-                    
-                    DispatchQueue.main.async {
-                        cell.activityIndicator.stopAnimating()
-                        cell.activityIndicator.isHidden = true
-                        cell.imageView?.image = UIImage(data: imageData as Data)
-                    }
-                }
+                })
             }
         }
 
@@ -179,8 +173,16 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
         let deleteAction = UIAlertAction(title: "Delete Photo", style: .destructive) { (action) in
             self.context.delete(self.fetchedResultsController.object(at: indexPath) as! Photo)
             self.photos.remove(at: indexPath.row)
+            
+            
             DispatchQueue.main.async {
-                self.collectionView.reloadData()
+                do {
+                    try self.delegate.stack?.saveContext()
+                } catch let error as NSError {
+                    print("Error saving context: \(error.localizedDescription)")
+                }
+
+                self.collectionView.deleteItems(at: [indexPath])
             }
         }
         
@@ -216,16 +218,17 @@ class PhotoAlbumViewController: UIViewController, UICollectionViewDataSource, UI
     @IBAction func newCollectionButtonDidTap(_ sender: Any) {
         print("FETCHING NEW COLLECTION...")
         DispatchQueue.main.async {
-            self.photos.removeAll()
-            print(self.photos)
+//            self.photos.removeAll()
+            self.photos = []
             self.collectionView.reloadData()
-            print("Reload Data newColVC")
-        }
-        for items in fetchedResultsController.fetchedObjects! {
-            context.delete(items as! NSManagedObject)
         }
         
-        getPhotosURL()
+        for items in photos {
+            context.delete(items as NSManagedObject)
+        }
+
+        
+        loadPhotosURL()
     }
     
     
